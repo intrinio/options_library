@@ -2,7 +2,7 @@
 # Since Feb 18, 2011
 # Based on Black-Scholes forumla for pricing options
 
-module Option
+module OptionsCalculations
   class Model
 
     # The two known option types, Call and Put

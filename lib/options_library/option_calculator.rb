@@ -2,7 +2,7 @@
 # Since Feb 13, 2011
 # Based on Black-Scholes forumla for pricing options
 
-module Option
+module OptionsCalculations
   class Calculator
 	class << self
       # used for finding implied vol based on a market (target) price
