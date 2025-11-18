@@ -19,5 +19,5 @@ jobs:
           bundler-cache: true
       - name: Install dependencies
         run: bundle install
-      - name: Run tests
+      - name: Run calculator tests
         run: rspec ./spec/option_calculator_spec.rb
