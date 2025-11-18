@@ -20,4 +20,4 @@ jobs:
       - name: Install dependencies
         run: bundle install
       - name: Run calculator tests
-        run: rspec ./spec/option_calculator_spec.rb
+        run: bundle exec rspec ./spec/option_calculator_spec.rb
