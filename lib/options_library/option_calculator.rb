@@ -18,7 +18,7 @@ module OptionsCalculations
 
       # Checks if inputs are valid; returns true if valid, false otherwise
       def valid_inputs?(underlying, strike, time, sigma)
-        underlying > 0.0 && strike > 0.0 && time > 0.0 && sigma > 0.0
+        underlying > 0.0 && strike > 0.0 && time > 0.0 && sigma > 0.0 && underlying != Float::INFINITY && strike != Float::INFINITY && time != Float::INFINITY && sigma != Float::INFINITY
       end
 
       # computes the call price sensitivity to a change in underlying price
