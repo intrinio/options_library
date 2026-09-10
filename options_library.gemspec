@@ -3,6 +3,7 @@
 Gem::Specification.new do |s|
   s.name = %q{options_library}
   s.version = "2.0.0"
+  s.required_ruby_version = Gem::Requirement.new(">= 3.4.7")
 
   s.required_rubygems_version = Gem::Requirement.new(">= 1.2") if s.respond_to? :required_rubygems_version=
   s.authors = ["Dan Tylenda-Emmons"]
