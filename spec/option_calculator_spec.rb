@@ -70,6 +70,11 @@ RSpec.describe OptionsCalculations::Calculator do
       expect(described_class.send(method_name, 100, -100, 1, 0.05, 10, 0.03)).to be_nil  # negative K
       expect(described_class.send(method_name, 100, 100, -1, 0.05, 10, 0.03)).to be_nil  # negative T
       expect(described_class.send(method_name, Float::NAN, 100, 1, 0.05, 10, 0.03)).to be_nil  # NaN
+      expect(described_class.send(method_name, 100, 100, 1, 0.05, nil, 0.03)).to be_nil  # nil target
+      expect(described_class.send(method_name, 100, 100, 1, 0.05, Float::NAN, 0.03)).to be_nil  # NaN target
+      expect(described_class.send(method_name, 100, 100, 1, 0.05, Float::INFINITY, 0.03)).to be_nil  # infinite target
+      expect(described_class.send(method_name, 100, 100, 1, Float::INFINITY, 10, 0.03)).to be_nil  # infinite rate
+      expect(described_class.send(method_name, 100, 100, 1, 0.05, 10, Float::NAN)).to be_nil  # NaN dividend
     end
   end
 
@@ -639,7 +644,7 @@ RSpec.describe OptionsCalculations::Calculator do
       it 'handles near-zero price for deep OTM' do
         target = 0.0
         vol = described_class.implied_vol_call(100, 200, 1, 0.05, target, 0)
-        expect(vol).to be > 0  # Returns some small positive vol
+        expect(vol).to be_nil
       end
 
       it 'recovers volatility for deep ITM' do
@@ -692,16 +697,30 @@ RSpec.describe OptionsCalculations::Calculator do
         approx_equal(described_class.implied_vol_call(300, 250, 2, -0.005, target, 0.05), 0.22, 1e-3)
       end
 
-      it 'handles target above parity' do
+      it 'returns nil for target above parity' do
         target = 200  # Way above
         vol = described_class.implied_vol_call(100, 100, 1, 0.05, target, 0.03)
-        expect(vol).to be > 1.0  # High vol
+        expect(vol).to be_nil
       end
 
-      it 'handles target below 0' do
+      it 'returns nil for target below 0' do
         target = -1
         vol = described_class.implied_vol_call(100, 100, 1, 0.05, target, 0.03)
-        expect(vol).to be > 0  # Some vol
+        expect(vol).to be_nil
+      end
+
+      it 'returns nil when vega is too small before convergence' do
+        allow(described_class).to receive(:phi).and_return(0.0)
+
+        expect(described_class.implied_vol_call(100, 100, 1, 0.05, 10, 0.03)).to be_nil
+      end
+
+      it 'only returns a volatility that reprices to the target' do
+        target = described_class.price_call(100, 100, 1, 0.05, 0.2, 0.03)
+        vol = described_class.implied_vol_call(100, 100, 1, 0.05, target, 0.03)
+        repriced = described_class.price_call(100, 100, 1, 0.05, vol, 0.03)
+
+        expect((repriced - target).abs).to be < 1e-10
       end
     end
   end
@@ -750,9 +769,11 @@ RSpec.describe OptionsCalculations::Calculator do
         approx_equal(described_class.implied_vol_put(100, 100, 1, 0.05, target, 0.1), 0.2, 1e-3)
       end
 
-      it 'recovers volatility for ITM short time' do
+      it 'returns nil for a negative ITM short-time target' do
         target = described_class.price_put(90, 80, 0.2, 0.06, 0.3, 0.04)
-        approx_equal(described_class.implied_vol_put(90, 80, 0.2, 0.06, target, 0.04), 0.3, 1e-3)
+
+        expect(target).to be < 0
+        expect(described_class.implied_vol_put(90, 80, 0.2, 0.06, target, 0.04)).to be_nil
       end
 
       it 'recovers volatility for negative rate ITM' do
@@ -760,16 +781,30 @@ RSpec.describe OptionsCalculations::Calculator do
         approx_equal(described_class.implied_vol_put(300, 250, 2, -0.005, target, 0.05), 0.22, 1e-3)
       end
 
-      it 'handles target above parity' do
+      it 'returns nil for target above parity' do
         target = 200
         vol = described_class.implied_vol_put(100, 100, 1, 0.05, target, 0.03)
-        expect(vol).to be > 1.0
+        expect(vol).to be_nil
       end
 
-      it 'handles target below 0' do
+      it 'returns nil for target below 0' do
         target = -1
         vol = described_class.implied_vol_put(100, 100, 1, 0.05, target, 0.03)
-        expect(vol).to be > 0
+        expect(vol).to be_nil
+      end
+
+      it 'returns nil when vega is too small before convergence' do
+        allow(described_class).to receive(:phi).and_return(0.0)
+
+        expect(described_class.implied_vol_put(100, 100, 1, 0.05, 10, 0.03)).to be_nil
+      end
+
+      it 'only returns a volatility that reprices to the target' do
+        target = described_class.price_put(100, 100, 1, 0.05, 0.2, 0.03)
+        vol = described_class.implied_vol_put(100, 100, 1, 0.05, target, 0.03)
+        repriced = described_class.price_put(100, 100, 1, 0.05, vol, 0.03)
+
+        expect((repriced - target).abs).to be < 1e-10
       end
     end
   end
