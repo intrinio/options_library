@@ -44,6 +44,16 @@ RSpec.describe OptionsCalculations::Calculator do
     it 'returns false if strike is infinity' do
       expect(described_class.valid_inputs?(100, Float::INFINITY, 1, 0.2)).to be false
     end
+
+    it 'returns false instead of raising for non-numeric inputs' do
+      expect(described_class.valid_inputs?(nil, 100, 1, 0.2)).to be false
+      expect(described_class.valid_inputs?(100, '100', 1, 0.2)).to be false
+    end
+
+    it 'returns false for non-finite time and volatility inputs' do
+      expect(described_class.valid_inputs?(100, 100, Float::INFINITY, 0.2)).to be false
+      expect(described_class.valid_inputs?(100, 100, 1, Float::NAN)).to be false
+    end
   end
 
   shared_examples 'returns nil for invalid inputs' do |method_name|
@@ -73,8 +83,46 @@ RSpec.describe OptionsCalculations::Calculator do
       expect(described_class.send(method_name, 100, 100, 1, 0.05, nil, 0.03)).to be_nil  # nil target
       expect(described_class.send(method_name, 100, 100, 1, 0.05, Float::NAN, 0.03)).to be_nil  # NaN target
       expect(described_class.send(method_name, 100, 100, 1, 0.05, Float::INFINITY, 0.03)).to be_nil  # infinite target
+      expect(described_class.send(method_name, 100, 100, 1, 0.05, '10', 0.03)).to be_nil  # non-numeric target
+      expect(described_class.send(method_name, 100, 100, 1, nil, 10, 0.03)).to be_nil  # nil rate
       expect(described_class.send(method_name, 100, 100, 1, Float::INFINITY, 10, 0.03)).to be_nil  # infinite rate
+      expect(described_class.send(method_name, 100, 100, 1, 0.05, 10, nil)).to be_nil  # nil dividend
       expect(described_class.send(method_name, 100, 100, 1, 0.05, 10, Float::NAN)).to be_nil  # NaN dividend
+    end
+  end
+
+  shared_examples 'implied vol solver bailouts' do |method_name, price_method|
+    it 'returns nil when the pricing method returns a non-numeric result' do
+      allow(described_class).to receive(price_method).and_return(nil)
+
+      expect(described_class.send(method_name, 100, 100, 1, 0.05, 10, 0.03)).to be_nil
+    end
+
+    it 'returns nil when the pricing method returns a non-finite result' do
+      allow(described_class).to receive(price_method).and_return(Float::INFINITY)
+
+      expect(described_class.send(method_name, 100, 100, 1, 0.05, 10, 0.03)).to be_nil
+    end
+
+    it 'returns nil when vega becomes non-finite before convergence' do
+      allow(described_class).to receive(:phi).and_return(Float::INFINITY)
+
+      expect(described_class.send(method_name, 100, 100, 1, 0.05, 10, 0.03)).to be_nil
+    end
+
+    it 'returns nil when the Newton update becomes non-finite' do
+      allow(described_class).to receive(price_method).and_return(Float::MAX)
+      allow(described_class).to receive(:phi).and_return(1e-10)
+
+      expect(described_class.send(method_name, 100, 100, 1, 0.05, 10, 0.03)).to be_nil
+    end
+
+    it 'returns nil after exhausting the iteration limit without convergence' do
+      allow(described_class).to receive(price_method).and_return(11.0)
+      allow(described_class).to receive(:phi).and_return(1.0)
+
+      expect(described_class.send(method_name, 100, 100, 1, 0.05, 10, 0.03)).to be_nil
+      expect(described_class).to have_received(price_method).exactly(50).times
     end
   end
 
@@ -629,6 +677,7 @@ RSpec.describe OptionsCalculations::Calculator do
 
   describe '.implied_vol_call' do
     include_examples 'implied vol returns nil for invalid inputs', :implied_vol_call
+    include_examples 'implied vol solver bailouts', :implied_vol_call, :price_call
 
     context 'with valid inputs' do
       it 'recovers volatility for standard ATM case' do
@@ -727,6 +776,7 @@ RSpec.describe OptionsCalculations::Calculator do
 
   describe '.implied_vol_put' do
     include_examples 'implied vol returns nil for invalid inputs', :implied_vol_put
+    include_examples 'implied vol solver bailouts', :implied_vol_put, :price_put
 
     context 'with valid inputs' do
       it 'recovers volatility for standard ATM case' do
