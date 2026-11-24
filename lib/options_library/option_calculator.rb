@@ -18,7 +18,9 @@ module OptionsCalculations
 
       # Checks if inputs are valid; returns true if valid, false otherwise
       def valid_inputs?(underlying, strike, time, sigma)
-        underlying > 0.0 && strike > 0.0 && time > 0.0 && sigma > 0.0 && underlying != Float::INFINITY && strike != Float::INFINITY && time != Float::INFINITY && sigma != Float::INFINITY
+        [underlying, strike, time, sigma].all? do |value|
+          value.is_a?(Numeric) && value.finite? && value > 0.0
+        end
       end
 
       # computes the call price sensitivity to a change in underlying price
@@ -106,6 +108,7 @@ module OptionsCalculations
       # finds the implied volatility based on the target_price passed in.
       def implied_vol_call( underlying, strike, time, interest, target_price, dividend )
         return nil unless valid_inputs?(underlying, strike, time, 0.1) # Dummy sigma for validation
+        return nil unless valid_implied_vol_target?(underlying, strike, time, interest, target_price, dividend)
         forward = underlying * exp( (interest - dividend) * time )
         m = forward / strike
         sigma = sqrt( 2.0 * log(m).abs / time )
@@ -115,21 +118,24 @@ module OptionsCalculations
         iter = 0
         while iter < max_iter
           price = price_call( underlying, strike, time, interest, sigma, dividend )
+          return nil unless price.is_a?(Numeric) && price.finite?
           diff = price - target_price
-          break if diff.abs < tol
+          return sigma if diff.abs < tol
           d1 = d_one( underlying, strike, time, interest, sigma, dividend )
           vega = underlying * exp(-dividend * time) * sqrt(time) * phi(d1)
-          break if vega.abs < 1e-10
+          return nil unless vega.finite? && vega.abs >= 1e-10
           sigma -= diff / vega
+          return nil unless sigma.finite?
           sigma = 0.0001 if sigma <= 0.0
           iter += 1
         end
-        sigma
+        nil
       end
 
       # finds the implied volatility based on the target_price passed in.
       def implied_vol_put( underlying, strike, time, interest, target_price, dividend )
         return nil unless valid_inputs?(underlying, strike, time, 0.1) # Dummy sigma for validation
+        return nil unless valid_implied_vol_target?(underlying, strike, time, interest, target_price, dividend)
         forward = underlying * exp( (interest - dividend) * time )
         m = forward / strike
         sigma = sqrt( 2.0 * log(m).abs / time )
@@ -139,16 +145,18 @@ module OptionsCalculations
         iter = 0
         while iter < max_iter
           price = price_put( underlying, strike, time, interest, sigma, dividend )
+          return nil unless price.is_a?(Numeric) && price.finite?
           diff = price - target_price
-          break if diff.abs < tol
+          return sigma if diff.abs < tol
           d1 = d_one( underlying, strike, time, interest, sigma, dividend )
           vega = underlying * exp(-dividend * time) * sqrt(time) * phi(d1)
-          break if vega.abs < 1e-10
+          return nil unless vega.finite? && vega.abs >= 1e-10
           sigma -= diff / vega
+          return nil unless sigma.finite?
           sigma = 0.0001 if sigma <= 0.0
           iter += 1
         end
-        sigma
+        nil
       end
 
       # probability of being exercised at maturity (must be greater than d2 by (sigma*sqrt(time)) if exercised)
@@ -195,6 +203,14 @@ module OptionsCalculations
       def phi(x)
         exp(-0.5 * x * x) / ROOT_2_PI
       end
+
+      def valid_implied_vol_target?(underlying, strike, time, interest, target_price, dividend)
+        values = [underlying, strike, time, interest, target_price, dividend]
+        return false unless values.all? { |value| value.is_a?(Numeric) && value.finite? }
+
+        target_price > 0.0
+      end
+      private :valid_implied_vol_target?
 
     end
   end
